@@ -15,15 +15,14 @@ const passport = require("passport");
 const localStrategy = require("passport-local").Strategy; 
 const session = require("express-session"); 
 const MongoStore = require("connect-mongo")(session);  
-var expressValidator = require('express-validator');
+const expressValidator = require('express-validator');
 
-
-const {check, validationResult} = require ("express-validator/check"); 
 
 
 
 let app = express(); 
 app.use(bodyParser.json());
+//app.use(body); 
 app.use(expressValidator());  
 
 mongoose.connect("mongodb://localhost/login").then(
@@ -86,6 +85,14 @@ function isPasswordValid (pw, hash){
  * 
  */
 
+ app.post("/", function(req, res, next){
+     return res.status(200).json({"home" : "redirect to home page"});
+ })
+
+ app.get("/", function(req, res, next){
+    return res.status(200).json({"home" : "redirect to home page"});
+})
+
 app.post("/login", 
 
 passport.authenticate("local-login", {failureRedirect : "/" }), function(req, res){
@@ -106,15 +113,30 @@ passport.use("local-login", new localStrategy({
     passReqToCallback : true
 }, function(req, username, password, done) {
 
+    console.log("HEllo from checkBODY");
 
-    // use validator 
-    if(!req.body.username || !req.body.password) {
-        return done(null, false, "Wrong credential"); 
-    } 
-    // use validator
-    if (req.body.username.lenght === 0 || req.body.password.lenght === 0 ){
-        return done(null, false, "Wrong credentials"); 
+    req.checkBody('username', 'Username is required').notEmpty().isLength({min: 3, max : 20}); 
+    req.checkBody('password', 'Wrong credential').notEmpty(); 
+
+    let lclError = req.validationErrors(); 
+
+    console.log(lclError); 
+
+    console.log("HEllo from lclERROR");
+    //console.log(lclError); 
+
+    if (lclError){
+        console.log("HEllo from IF lclERROR");
+        return done(null, false, "Wronr credential"); 
     }
+
+    //req.sanitizeBody(); 
+    console.log("HEllo from sanitize "); 
+
+    req.sanitizeBody('username').trim(); 
+    req.sanitizeBody('password').trim();
+
+    console.log("HEllo from MONGO"); 
 userModel.findOne({"username" : username}, function(err, user){
         if (err){
             return done(err); 
@@ -136,58 +158,32 @@ userModel.findOne({"username" : username}, function(err, user){
 }))
 
 
-/**
- *  Validaator email 
- * req.check('email', 'invalid email address').isEmail(); 
- * validate password 
- * req.check('Password is not valid').isLenght({min : 8}).equals(req.body.confirmPassword); 
- * var errors = req.validationErrors(); 
- * if (error){
- *  req.session.errors  = errors;
- * }
- * 
- * res.redirect("/register""); 
- */
-
 app.post("/register", function(req, res){
     
+    req.checkBody('username', 'Name is required').not().isEmpty().isLength({min : 6}); 
+    req.checkBody('password', 'Password is required').not().isEmpty();   
+    req.checkBody('password', 'passsword and confirmpassword does`t match').equals(req.body.confirmpassword);       
+    req.checkBody('displayname', 'Displayname is required').notEmpty(); 
+    req.checkBody('email', 'Email is required').notEmpty().isEmail();  
+
     /**  Use validator  */
-    req.check('username', 'Name is required').notEmpty(); 
-    req.check('password', 'Password is required').notEmpty(); 
-    req.check('displayname', 'Displayname is required').notEmpty(); 
-    req.check('email', 'Email is required').notEmpty().isEmail(); 
+   
     let valError = req.validationErrors(); 
 
-
-    console.log(valError); 
-    if(valError){
+    //console.log(valError.isEmpty); 
+    if(!valError.isEmpty){
         return res.status(409).json({valError}); 
     }
 
-    /*
-    let errmessage = ""; 
-    if (!req.body.username || !req.body.password ){
-        return res.status(409).json({"message" :  "provide credentials" })
-    } 
-     if(!req.body.disname || !req.body.email){
-        return res.status(409).json({"message" :  "provide credentials" })
-    } 
-    if(req.body.username.lenght === 0 || req.body.password.lenght === 0){
-        return res.status(409).json({"message" :  "provide credentials" }) 
-    } 
-    if (req.body.disname.lenght === 0|| req.body.email.lenght === 0){
-        return res.status(409).json({"message" :  "provide credentials" })
-    }
-    */ 
 /** Should we save email with salt?*/
 
-    body('email').not().isEmail().normalizeEmail(); 
-    body('username').not().isEmpty().trim().escape(); 
-    body('password').not().isEmpty().trim().escape(); 
-    body('displayname').not().isEmpty().trim().escape(); 
+    req.sanitizeBody('email').normalizeEmail(); 
+    req.sanitizeBody('username').trim(); 
+    req.sanitizeBody('password').trim(); 
+    req.sanitizeBody('displayname').trim(); 
 
     console.log(req.body); 
-
+    
     let user = new userModel({
         "username" : req.body.username, 
         "displayname" : req.body.displayname, 
@@ -195,6 +191,7 @@ app.post("/register", function(req, res){
         "email" : req.body.email
     })
 
+    console.log(user); 
     user.save(function(err){
             if(err){
                 return res.status(409).json({ "message" : "username or email address already in use " });

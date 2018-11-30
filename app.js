@@ -5,11 +5,8 @@ const userModel = require("./models/users");
 const bcrypt = require("bcrypt")
 const actrouter = require("./routes/actrouter"); 
 
-const { body } = require('express-validator/check');
+const { body, check, validationResult } = require('express-validator/check');
 const { sanitizeBody } = require('express-validator/filter');
-
-//const validator = require("express-validator"); 
-// ********** 
 
 const passport = require("passport"); 
 const localStrategy = require("passport-local").Strategy; 
@@ -22,8 +19,6 @@ const expressValidator = require('express-validator');
 
 let app = express(); 
 app.use(bodyParser.json());
-//app.use(body); 
-app.use(expressValidator());  
 
 mongoose.connect("mongodb://localhost/login").then(
     () => {console.log("Connection to mongo DB successfull")},
@@ -78,12 +73,6 @@ function isPasswordValid (pw, hash){
     return bcrypt.compareSync(pw, hash); 
 }
 
-/**
- * How users we login to programm by username or email?
- * 
- *
- * 
- */
 
  app.post("/", function(req, res, next){
      return res.status(200).json({"home" : "redirect to home page"});
@@ -93,7 +82,22 @@ function isPasswordValid (pw, hash){
     return res.status(200).json({"home" : "redirect to home page"});
 })
 
-app.post("/login", 
+app.post("/login", [
+
+    sanitizeBody('username').trim().escape(), 
+    sanitizeBody('password').trim().escape(), 
+    body('username').isLength({min : 3, max : 20}).withMessage('Username must be at least 6 digit. Symbols: <,>,&,\',\",/ not allowed'), 
+    body('password').isLength({min : 3, max : 20}).withMessage('Password must be at least 6 digit. Symbols: <,>,&,\',\",/ not allowed')
+
+], function(req, res, next){
+
+    const lgnerrors = validationResult(req);
+    if (!lgnerrors.isEmpty()) {
+       return res.status(409).json(lgnerrors.array());
+    } else {
+        next(); 
+    }
+}, 
 
 passport.authenticate("local-login", {failureRedirect : "/" }), function(req, res){
     return res.status(200).json({"token" : req.session.token})
@@ -113,30 +117,6 @@ passport.use("local-login", new localStrategy({
     passReqToCallback : true
 }, function(req, username, password, done) {
 
-    console.log("HEllo from checkBODY");
-
-    req.checkBody('username', 'Username is required').notEmpty().isLength({min: 3, max : 20}); 
-    req.checkBody('password', 'Wrong credential').notEmpty(); 
-
-    let lclError = req.validationErrors(); 
-
-    console.log(lclError); 
-
-    console.log("HEllo from lclERROR");
-    //console.log(lclError); 
-
-    if (lclError){
-        console.log("HEllo from IF lclERROR");
-        return done(null, false, "Wronr credential"); 
-    }
-
-    //req.sanitizeBody(); 
-    console.log("HEllo from sanitize "); 
-
-    req.sanitizeBody('username').trim(); 
-    req.sanitizeBody('password').trim();
-
-    console.log("HEllo from MONGO"); 
 userModel.findOne({"username" : username}, function(err, user){
         if (err){
             return done(err); 
@@ -146,9 +126,6 @@ userModel.findOne({"username" : username}, function(err, user){
         }
         if (isPasswordValid(password, user.password)){
 
-            /**
-             * Try ceate react-token 
-             */
             let token = createToken(); 
             req.session.token = token; 
             req.session.username = username; 
@@ -158,32 +135,25 @@ userModel.findOne({"username" : username}, function(err, user){
 }))
 
 
-app.post("/register", function(req, res){
-    
-    req.checkBody('username', 'Name is required').not().isEmpty().isLength({min : 6}); 
-    req.checkBody('password', 'Password is required').not().isEmpty();   
-    req.checkBody('password', 'passsword and confirmpassword does`t match').equals(req.body.confirmpassword);       
-    req.checkBody('displayname', 'Displayname is required').notEmpty(); 
-    req.checkBody('email', 'Email is required').notEmpty().isEmail();  
+app.post("/register", [
 
-    /**  Use validator  */
-   
-    let valError = req.validationErrors(); 
+    body('username').isLength({min : 6, max : 20}).withMessage('Username must be at least 6 digit'), 
+    body('password').isLength({min : 6, max : 20}).withMessage('Password must be at least 6 digit'), 
+    body('displayname').isLength({min : 6, max : 20}).withMessage('Displayname must be at least 6 digit'), 
+    body('email').isEmail().withMessage('Check email address'), 
+    sanitizeBody('username').trim().escape(), 
+    sanitizeBody('password').trim().escape(), 
+    sanitizeBody('displayname').trim().escape(), 
+    sanitizeBody('email').normalizeEmail()
 
-    //console.log(valError.isEmpty); 
-    if(!valError.isEmpty){
-        return res.status(409).json({valError}); 
+], function(req, res){
+
+    const errors = validationResult(req);
+
+    if (!errors.isEmpty()) {
+       return res.status(409).json(errors.array());
     }
 
-/** Should we save email with salt?*/
-
-    req.sanitizeBody('email').normalizeEmail(); 
-    req.sanitizeBody('username').trim(); 
-    req.sanitizeBody('password').trim(); 
-    req.sanitizeBody('displayname').trim(); 
-
-    console.log(req.body); 
-    
     let user = new userModel({
         "username" : req.body.username, 
         "displayname" : req.body.displayname, 
@@ -191,20 +161,14 @@ app.post("/register", function(req, res){
         "email" : req.body.email
     })
 
-    console.log(user); 
-    user.save(function(err){
-            if(err){
-                return res.status(409).json({ "message" : "username or email address already in use " });
-            }
-    })
-    return res.status(200).json({"message": "success"})
-
+    user.save().then(
+        () => {return res.status(200).json({"message": "success"})}, 
+        (error) => { return res.status(409).json({ "message" : "username or email address already in use " });}
+    )
 });
 
 
 function isUserLogged(req, res, next){
-
-    //console.log(req.headers);
 
     let token = req.headers.token; 
      if(req.isAuthenticated()){

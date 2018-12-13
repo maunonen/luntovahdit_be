@@ -3,19 +3,15 @@ const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
 const userModel = require("./models/users");
 const bcrypt = require("bcrypt")
-const actrouter = require("./routes/actrouter"); 
+const profileRoute = require("./routes/profileRouter");
 
-const { body, check, validationResult } = require('express-validator/check');
-const { sanitizeBody } = require('express-validator/filter');
+const {body,check,validationResult  }   = require('express-validator/check');
+const {sanitizeBody}  = require('express-validator/filter');
 
 const passport = require("passport"); 
 const localStrategy = require("passport-local").Strategy; 
 const session = require("express-session"); 
 const MongoStore = require("connect-mongo")(session);  
-const expressValidator = require('express-validator');
-
-
-
 
 let app = express(); 
 app.use(bodyParser.json());
@@ -74,19 +70,15 @@ function isPasswordValid (pw, hash){
 }
 
 
- app.post("/", function(req, res, next){
-     return res.status(200).json({"home" : "redirect to home page"});
- })
-
  app.get("/", function(req, res, next){
     return res.status(200).json({"home" : "redirect to home page"});
 })
 
 app.post("/login", [
 
-    sanitizeBody('username').trim().escape(), 
-    sanitizeBody('password').trim().escape(), 
-    body('username').isLength({min : 3, max : 20}).withMessage('Username must be at least 6 digit. Symbols: <,>,&,\',\",/ not allowed'), 
+    sanitizeBody('username').trim().escape(),
+    sanitizeBody('password').trim().escape(),
+    body('username').isLength({min : 3, max : 20}).withMessage('Username must be at least 6 digit. Symbols: <,>,&,\',\",/ not allowed'),
     body('password').isLength({min : 3, max : 20}).withMessage('Password must be at least 6 digit. Symbols: <,>,&,\',\",/ not allowed')
 
 ], function(req, res, next){
@@ -135,8 +127,11 @@ userModel.findOne({"username" : username}, function(err, user){
 }))
 
 
+
+
 app.post("/register", [
 
+    
     body('username').isLength({min : 6, max : 20}).withMessage('Username must be at least 6 digit'), 
     body('password').isLength({min : 6, max : 20}).withMessage('Password must be at least 6 digit'), 
     body('displayname').isLength({min : 6, max : 20}).withMessage('Displayname must be at least 6 digit'), 
@@ -145,6 +140,7 @@ app.post("/register", [
     sanitizeBody('password').trim().escape(), 
     sanitizeBody('displayname').trim().escape(), 
     sanitizeBody('email').normalizeEmail()
+
 
 ], function(req, res){
 
@@ -189,8 +185,8 @@ function createToken (){
     return token; 
 }
 
-app.use("/luontovahdit", isUserLogged, actrouter); 
-app.listen(3002); 
+app.use("/profile", isUserLogged, profileRoute);
+app.listen(3002);
 console.log("Running in port 3002"); 
 
 
